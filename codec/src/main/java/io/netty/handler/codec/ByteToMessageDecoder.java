@@ -88,14 +88,15 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
             try {
                 final int required = in.readableBytes();
                 if (required > cumulation.maxWritableBytes() ||
-                        (required > cumulation.maxFastWritableBytes() && cumulation.refCnt() > 1) || // 需要重新分配才能容纳而累积缓冲区被其他使用者分享
-                        cumulation.isReadOnly()) { // 累积缓冲区只读
+                        (required > cumulation.maxFastWritableBytes() && cumulation.refCnt() > 1) ||
+                        cumulation.isReadOnly()) {
                     // Expand cumulation (by replacing it) under the following conditions:
                     // - cumulation cannot be resized to accommodate the additional data
                     // 累积缓冲区无法扩容到可以累积追加数据
                     // - cumulation can be expanded with a reallocation operation to accommodate but the buffer is
                     //   assumed to be shared (e.g. refCnt() > 1) and the reallocation may not be safe.
-                    // 虽然累积缓冲区可以通过再分配操作实现扩容以累积追加数据，但缓冲区被判定为被分享（通过 refCnt)() > 1），再分配可能不安全。
+                    // 虽然累积缓冲区可以通过再分配操作实现扩容以累积追加数据，但缓冲区被判定为被分享（通过 refCnt)() > 1），
+                    // 此时执行再分配可能不安全。
                     // - 累积缓冲区是只读的，不能累积追加
 
                     // 进行扩容替换
@@ -449,7 +450,7 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
                 // 此时 outSize 必定是 0
 
                 int oldInputLength = in.readableBytes();
-                decodeRemovalReentryProtection(ctx, in, out); // 这个方法要求子类实现：调用完 decode 方法后要么 in 没有数据了，要么 in 数据完全没有被消耗。否则会导致死循环
+                decodeRemovalReentryProtection(ctx, in, out);
 
                 // Check if this handler was removed before continuing the loop.
                 // If it was removed, it is not safe to continue to operate on the buffer.
@@ -460,11 +461,12 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
                 }
 
                 if (outSize == out.size()) { // outSize 必定是0。没有解码出任何 message
-                    if (oldInputLength == in.readableBytes()) { // 没有读数据，说明数据不完整，需要后续追加，交给下一次 channelRead 调用
+                    if (oldInputLength == in.readableBytes()) {
+                        // 没有读数据，说明数据不完整，需要后续追加，交给下一次 channelRead 调用
                         break;
                     } else {
-                        // 读过数据，但没有解出 message，continue 到下一轮循环，循环条件 in.isReadable() ，有数据继续读入并解析，没有数据就退出循环，等待下一次 channelRead 调用
-                        // 通常应该是没有可再读入的数据了，否则应该是子类实现错误，会导致不断重试尝试解码，死循环
+                        // 读过数据，但没有解出 message，continue 到下一轮循环
+                        // 循环条件 in.isReadable() ，有数据继续读入并解析，没有数据就退出循环，等待下一次 channelRead 调用
                         continue;
                     }
                 }
