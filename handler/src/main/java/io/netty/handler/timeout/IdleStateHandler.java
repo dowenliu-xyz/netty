@@ -108,7 +108,7 @@ public class IdleStateHandler extends ChannelDuplexHandler {
         }
     };
 
-    private final boolean observeOutput;
+    private final boolean observeOutput; // 是否检查输出缓冲区
     private final long readerIdleTimeNanos;
     private final long writerIdleTimeNanos;
     private final long allIdleTimeNanos;
@@ -127,10 +127,10 @@ public class IdleStateHandler extends ChannelDuplexHandler {
     private byte state; // 0 - none, 1 - initialized, 2 - destroyed
     private boolean reading;
 
-    private long lastChangeCheckTimeStamp;
-    private int lastMessageHashCode;
-    private long lastPendingWriteBytes;
-    private long lastFlushProgress;
+    private long lastChangeCheckTimeStamp; // 上次执行写操作调用时间戳
+    private int lastMessageHashCode; // 上次检查时，输出缓冲区内容Hash值
+    private long lastPendingWriteBytes; // 上次查检时，输出缓冲区待输出字节数
+    private long lastFlushProgress; // 上次查检时，缓冲区输出进度
 
     /**
      * Creates a new instance firing {@link IdleStateEvent}s.
