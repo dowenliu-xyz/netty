@@ -88,21 +88,27 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
             try {
                 final int required = in.readableBytes();
                 if (required > cumulation.maxWritableBytes() ||
-                        (required > cumulation.maxFastWritableBytes() && cumulation.refCnt() > 1) ||
-                        cumulation.isReadOnly()) {
+                        (required > cumulation.maxFastWritableBytes() && cumulation.refCnt() > 1) || // 需要重新分配才能容纳而累积缓冲区被其他使用者分享
+                        cumulation.isReadOnly()) { // 累积缓冲区只读
                     // Expand cumulation (by replacing it) under the following conditions:
                     // - cumulation cannot be resized to accommodate the additional data
+                    // 累积缓冲区无法扩容到可以累积追加数据
                     // - cumulation can be expanded with a reallocation operation to accommodate but the buffer is
                     //   assumed to be shared (e.g. refCnt() > 1) and the reallocation may not be safe.
+                    // 虽然累积缓冲区可以通过再分配操作实现扩容以累积追加数据，但缓冲区被判定为被分享（通过 refCnt)() > 1），再分配可能不安全。
+                    // - 累积缓冲区是只读的，不能累积追加
+
+                    // 进行扩容替换
                     return expandCumulation(alloc, cumulation, in);
                 }
+                // 不需要扩容替换
                 cumulation.writeBytes(in, in.readerIndex(), required);
                 in.readerIndex(in.writerIndex());
                 return cumulation;
             } finally {
                 // We must release in in all cases as otherwise it may produce a leak if writeBytes(...) throw
                 // for whatever release (for example because of OutOfMemoryError)
-                in.release();
+                in.release(); // 防内存泄露
             }
         }
     };
@@ -270,9 +276,11 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
         if (msg instanceof ByteBuf) {
             CodecOutputList out = CodecOutputList.newInstance();
             try {
+                // 向累积缓冲区追加数据
                 first = cumulation == null;
                 cumulation = cumulator.cumulate(ctx.alloc(),
                         first ? Unpooled.EMPTY_BUFFER : cumulation, (ByteBuf) msg);
+                // 调用解码操作
                 callDecode(ctx, cumulation, out);
             } catch (DecoderException e) {
                 throw e;
@@ -281,10 +289,13 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
             } finally {
                 try {
                     if (cumulation != null && !cumulation.isReadable()) {
+                        // 累积缓冲区中数据都消耗了
+                        // 释放内存
                         numReads = 0;
                         cumulation.release();
                         cumulation = null;
                     } else if (++numReads >= discardAfterReads) {
+                        // 已经经过了足够多次 channelRead 调用，尝试释放下累积器 discardable bytes，减少OOM风险
                         // We did enough reads already try to discard some bytes so we not risk to see a OOME.
                         // See https://github.com/netty/netty/issues/4275
                         numReads = 0;
@@ -293,13 +304,13 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
 
                     int size = out.size();
                     firedChannelRead |= out.insertSinceRecycled();
-                    fireChannelRead(ctx, out, size);
+                    fireChannelRead(ctx, out, size); // 将解码出的数据交给后续 Handler
                 } finally {
                     out.recycle();
                 }
             }
         } else {
-            ctx.fireChannelRead(msg);
+            ctx.fireChannelRead(msg); // Pipeline 配置正确不可能不是 ByteBuf。为防止错误处理，交给后续 Handler
         }
     }
 
@@ -421,7 +432,7 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
             while (in.isReadable()) {
                 int outSize = out.size();
 
-                if (outSize > 0) {
+                if (outSize > 0) { // 先将 out 清空。
                     fireChannelRead(ctx, out, outSize);
                     out.clear();
 
@@ -430,38 +441,42 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
                     //
                     // See:
                     // - https://github.com/netty/netty/issues/4635
-                    if (ctx.isRemoved()) {
+                    if (ctx.isRemoved()) { // 当前 handler 已经被移除。退出解码操作
                         break;
                     }
                     outSize = 0;
                 }
+                // 此时 outSize 必定是 0
 
                 int oldInputLength = in.readableBytes();
-                decodeRemovalReentryProtection(ctx, in, out);
+                decodeRemovalReentryProtection(ctx, in, out); // 这个方法要求子类实现：调用完 decode 方法后要么 in 没有数据了，要么 in 数据完全没有被消耗。否则会导致死循环
 
                 // Check if this handler was removed before continuing the loop.
                 // If it was removed, it is not safe to continue to operate on the buffer.
                 //
                 // See https://github.com/netty/netty/issues/1664
-                if (ctx.isRemoved()) {
+                if (ctx.isRemoved()) { // 当前 handler 已经被移除。退出解码操作
                     break;
                 }
 
-                if (outSize == out.size()) {
-                    if (oldInputLength == in.readableBytes()) {
+                if (outSize == out.size()) { // outSize 必定是0。没有解码出任何 message
+                    if (oldInputLength == in.readableBytes()) { // 没有读数据，说明数据不完整，需要后续追加，交给下一次 channelRead 调用
                         break;
                     } else {
+                        // 读过数据，但没有解出 message，continue 到下一轮循环，循环条件 in.isReadable() ，有数据继续读入并解析，没有数据就退出循环，等待下一次 channelRead 调用
+                        // 通常应该是没有可再读入的数据了，否则应该是子类实现错误，会导致不断重试尝试解码，死循环
                         continue;
                     }
                 }
 
-                if (oldInputLength == in.readableBytes()) {
+                // 有解码出的 message
+                if (oldInputLength == in.readableBytes()) { // 但没有读取任何数据！
                     throw new DecoderException(
                             StringUtil.simpleClassName(getClass()) +
                                     ".decode() did not read anything but decoded a message.");
                 }
 
-                if (isSingleDecode()) {
+                if (isSingleDecode()) { // 当前 Handler 被设定为 只解码出一个 message
                     break;
                 }
             }
@@ -529,17 +544,19 @@ public abstract class ByteToMessageDecoder extends ChannelInboundHandlerAdapter 
         int oldBytes = oldCumulation.readableBytes();
         int newBytes = in.readableBytes();
         int totalBytes = oldBytes + newBytes;
+        // 分配新的累积缓冲区
         ByteBuf newCumulation = alloc.buffer(alloc.calculateNewCapacity(totalBytes, MAX_VALUE));
         ByteBuf toRelease = newCumulation;
         try {
             // This avoids redundant checks and stack depth compared to calling writeBytes(...)
-            newCumulation.setBytes(0, oldCumulation, oldCumulation.readerIndex(), oldBytes)
-                .setBytes(oldBytes, in, in.readerIndex(), newBytes)
-                .writerIndex(totalBytes);
-            in.readerIndex(in.writerIndex());
-            toRelease = oldCumulation;
+            newCumulation.setBytes(0, oldCumulation, oldCumulation.readerIndex(), oldBytes) // 复制旧累积器的数据
+                .setBytes(oldBytes, in, in.readerIndex(), newBytes) // 复制追加输入的数据
+                .writerIndex(totalBytes); // 设置 writerIndex
+            in.readerIndex(in.writerIndex()); // 完成复制，将输入的 readerIndex 设置为其 writerIndex 表示其数据已被消耗
+            toRelease = oldCumulation; // 要释放的对象指定为旧累积器
             return newCumulation;
         } finally {
+            // 将旧累积器释放（正常情况）或将新累积器释放（异常情况）
             toRelease.release();
         }
     }

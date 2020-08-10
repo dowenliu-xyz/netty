@@ -31,22 +31,32 @@ import java.nio.charset.UnsupportedCharsetException;
 
 /**
  * A random and sequential accessible sequence of zero or more bytes (octets).
+ * 一个可随机/顺序访问的0个或多个字节的序列。
  * This interface provides an abstract view for one or more primitive byte
  * arrays ({@code byte[]}) and {@linkplain ByteBuffer NIO buffers}.
+ * 该接口（抽象类）提供一个抽象视图，用于抽象一个或多个基本字节数组（{@code byte[]}）
+ * 或 {@linkplain ByteBuffer NIO缓冲区}。
  *
  * <h3>Creation of a buffer</h3>
+ * <h3>创建一个缓冲区</h3>
  *
  * It is recommended to create a new buffer using the helper methods in
  * {@link Unpooled} rather than calling an individual implementation's
  * constructor.
+ * 建议使用 {@link Unpooled} 提供的帮助方法来创建一个新的缓冲区，而不是使用特定实现类的构造器。
  *
  * <h3>Random Access Indexing</h3>
+ * <h3>按索引随机访问</h3>
  *
  * Just like an ordinary primitive byte array, {@link ByteBuf} uses
  * <a href="http://en.wikipedia.org/wiki/Zero-based_numbering">zero-based indexing</a>.
  * It means the index of the first byte is always {@code 0} and the index of the last byte is
  * always {@link #capacity() capacity - 1}.  For example, to iterate all bytes of a buffer, you
  * can do the following, regardless of its internal implementation:
+ * 同普通基础字节数组一样，{@link ByteBuf} 使用
+ *  * <a href="https://en.wikipedia.org/wiki/Zero-based_numbering">从零开始的索引</a>。
+ *  这意味着第一个字节的索引总是 {@code 0}，最后一个字节的索引总是 {@link #capacity() capacity} - 1。
+ * 例如，要遍历一个缓冲区中所有字节，你可以这样做（不用关心其内部实现）：
  *
  * <pre>
  * {@link ByteBuf} buffer = ...;
@@ -57,12 +67,17 @@ import java.nio.charset.UnsupportedCharsetException;
  * </pre>
  *
  * <h3>Sequential Access Indexing</h3>
+ * <h3>按索引位置顺序访问</h3>
  *
  * {@link ByteBuf} provides two pointer variables to support sequential
  * read and write operations - {@link #readerIndex() readerIndex} for a read
  * operation and {@link #writerIndex() writerIndex} for a write operation
  * respectively.  The following diagram shows how a buffer is segmented into
  * three areas by the two pointers:
+ * {@link ByteBuf} 提供了两个指针变量，用于支持顺序读写操作，分别是：
+ * {@link #readerIndex() readerIndex} 用于读操作，
+ * {@link #writerIndex() writerIndex} 用于写操作。
+ * 下图展示了一个缓冲区是如何被这两个变量分为三个区域的：
  *
  * <pre>
  *      +-------------------+------------------+------------------+
@@ -74,6 +89,7 @@ import java.nio.charset.UnsupportedCharsetException;
  * </pre>
  *
  * <h4>Readable bytes (the actual content)</h4>
+ * <h4>Readable bytes 可读字节区 (实际的内容)</h4>
  *
  * This segment is where the actual data is stored.  Any operation whose name
  * starts with {@code read} or {@code skip} will get or skip the data at the
@@ -81,10 +97,17 @@ import java.nio.charset.UnsupportedCharsetException;
  * read bytes.  If the argument of the read operation is also a
  * {@link ByteBuf} and no destination index is specified, the specified
  * buffer's {@link #writerIndex() writerIndex} is increased together.
+ * 该区域是实际数据的存储区域。所有名称以 {@code read} 和 {@code skip} 开头的操作都会在当前
+ * {@link #readerIndex() readerIndex} 处理获取或跳过数据，并将
+ * {@link #readerIndex() readerIndex} 的值增加获取/跳过的字节数。如果读操作的参数也是一个
+ * {@link ByteBuf} 且没有提供目标（写入）索引，那么提供的缓冲区的
+ * {@link #writerIndex() wrterIndex} 也会一并增加。
  * <p>
  * If there's not enough content left, {@link IndexOutOfBoundsException} is
  * raised.  The default value of newly allocated, wrapped or copied buffer's
  * {@link #readerIndex() readerIndex} is {@code 0}.
+ * 如果没有足够的内容（用于读取），将抛出 {@link IndexOutOfBoundsException}。
+ * 新分配/包装/复制的缓冲区的 {@link #readerIndex() readerIndex} 的默认值是 {@code 0}。
  *
  * <pre>
  * // Iterates the readable bytes of a buffer.
@@ -95,6 +118,7 @@ import java.nio.charset.UnsupportedCharsetException;
  * </pre>
  *
  * <h4>Writable bytes</h4>
+ * <h4>Writable bytes 可写入字节区</h4>
  *
  * This segment is a undefined space which needs to be filled.  Any operation
  * whose name starts with {@code write} will write the data at the current
@@ -102,12 +126,21 @@ import java.nio.charset.UnsupportedCharsetException;
  * bytes.  If the argument of the write operation is also a {@link ByteBuf},
  * and no source index is specified, the specified buffer's
  * {@link #readerIndex() readerIndex} is increased together.
+ * 该区域是一段未定值的用于写入的空间。所有名称以 {@code write} 开头的操作都将在当前
+ * {@link #writerIndex() writerIndex} 处理写入数据，并将
+ * {@link #writerIndex() writerIndex} 的值增加写入的字节数。如果写操作的参数也是一个
+ * {@link ByteBuf} 且没有提供源（读取）索引，那么提供的缓冲区的
+ * {@link #readerIndex() readerIndex} 也会一并增加。
  * <p>
  * If there's not enough writable bytes left, {@link IndexOutOfBoundsException}
  * is raised.  The default value of newly allocated buffer's
  * {@link #writerIndex() writerIndex} is {@code 0}.  The default value of
  * wrapped or copied buffer's {@link #writerIndex() writerIndex} is the
  * {@link #capacity() capacity} of the buffer.
+ * 如果没有剩余足够的可写区域（用于写入），将抛出 {@link IndexOutOfBoundsException}。
+ * 新分配的缓冲区的 {@link #writerIndex() writerIndex} 默认值为 {@code 0}。
+ * 包装或复制的缓冲区的 {@link #writerIndex() writerIndex} 默认值为缓冲区的
+ * {@link #capacity() capacity}。
  *
  * <pre>
  * // Fills the writable bytes of a buffer with random integers.
@@ -118,15 +151,21 @@ import java.nio.charset.UnsupportedCharsetException;
  * </pre>
  *
  * <h4>Discardable bytes</h4>
+ * <h4>Discardable bytes 可丢弃字节区域</h4>
  *
  * This segment contains the bytes which were read already by a read operation.
  * Initially, the size of this segment is {@code 0}, but its size increases up
  * to the {@link #writerIndex() writerIndex} as read operations are executed.
  * The read bytes can be discarded by calling {@link #discardReadBytes()} to
  * reclaim unused area as depicted by the following diagram:
+ * 该区域包含了已经通过读操作读过的字节数据。刚开始时，该区域大小为 {@code 0}，
+ * 但随着读操作的进行，其大小逐渐增长到 {@link #writerIndex() writerIndex}。
+ * 通过调用 {@link #discardReadBytes()} 可以丢弃已读字节数据，并回收其占用的无用的空间，
+ * 如下图所示：
  *
  * <pre>
  *  BEFORE discardReadBytes()
+ *  调用 discardReadBytes() 前
  *
  *      +-------------------+------------------+------------------+
  *      | discardable bytes |  readable bytes  |  writable bytes  |
@@ -136,6 +175,7 @@ import java.nio.charset.UnsupportedCharsetException;
  *
  *
  *  AFTER discardReadBytes()
+ *  调用 discardReadBytes() 后
  *
  *      +------------------+--------------------------------------+
  *      |  readable bytes  |    writable bytes (got more space)   |
@@ -148,17 +188,26 @@ import java.nio.charset.UnsupportedCharsetException;
  * after calling {@link #discardReadBytes()}.  The writable bytes will not be
  * moved in most cases and could even be filled with completely different data
  * depending on the underlying buffer implementation.
+ * 请注意，在调用 {@link #discardReadBytes()} 后，可写入字节区域中的内容没有任何保证。
+ * 大多数情况下可写入区域中的数据不会被移动，且按不同的底层缓冲区实现，
+ * 可写入字节区域中可能会被完全不同的数据填充。
  *
  * <h4>Clearing the buffer indexes</h4>
+ * <h4>Clearing the buffer indexes 清除缓冲区索引</h4>
  *
  * You can set both {@link #readerIndex() readerIndex} and
  * {@link #writerIndex() writerIndex} to {@code 0} by calling {@link #clear()}.
  * It does not clear the buffer content (e.g. filling with {@code 0}) but just
  * clears the two pointers.  Please also note that the semantic of this
  * operation is different from {@link ByteBuffer#clear()}.
+ * 通过调用 {@link #clear()} 方法，你可以同时将 {@link #readerIndex() readerIndex} 和
+ * {@link #writerIndex() writerIndex} 设置为 {@code 0}。这不会清除缓冲区中的内容（例如，
+ * 用 {@code 0} 填充），只清除这两个指针值。同时也请注意，该操作的语义与
+ * {@link ByteBuffer#clear()} 不同。
  *
  * <pre>
  *  BEFORE clear()
+ *  调用 clear() 前
  *
  *      +-------------------+------------------+------------------+
  *      | discardable bytes |  readable bytes  |  writable bytes  |
@@ -168,6 +217,7 @@ import java.nio.charset.UnsupportedCharsetException;
  *
  *
  *  AFTER clear()
+ *  调用 clear() 后
  *
  *      +---------------------------------------------------------+
  *      |             writable bytes (got more space)             |
@@ -177,13 +227,18 @@ import java.nio.charset.UnsupportedCharsetException;
  * </pre>
  *
  * <h3>Search operations</h3>
+ * <h3>Search operations 查找操作</h3>
  *
  * For simple single-byte searches, use {@link #indexOf(int, int, byte)} and {@link #bytesBefore(int, int, byte)}.
  * {@link #bytesBefore(byte)} is especially useful when you deal with a {@code NUL}-terminated string.
  * For complicated searches, use {@link #forEachByte(int, int, ByteProcessor)} with a {@link ByteProcessor}
  * implementation.
+ * 对于简单的单字节查找，使用 {@link #indexOf(int, int, byte)} 和 {@link #bytesBefore(int, int, byte)}。
+ * 当你要处理一个 {@code NULL} 结尾的字符串（C风格字符串）时， {@link #bytesBefore(byte)} 会特别有用。
+ * 对复杂的查找，使用 {@link #forEachByte(int, int, ByteProcessor)} 方法和一个 {@link ByteProcessor} 实现。
  *
  * <h3>Mark and reset</h3>
+ * <h3>Mark and reset 标记与重置</h3>
  *
  * There are two marker indexes in every buffer. One is for storing
  * {@link #readerIndex() readerIndex} and the other is for storing
@@ -191,10 +246,16 @@ import java.nio.charset.UnsupportedCharsetException;
  * two indexes by calling a reset method.  It works in a similar fashion to
  * the mark and reset methods in {@link InputStream} except that there's no
  * {@code readlimit}.
+ * 在各种缓冲区中都有两个标记索引。一个用于存储 {@link #readerIndex() readerIndex} ，
+ * 另一个用于存储 {@link #writerIndex() writerIndex}。
+ * 你总是可以通过调用重置方法将这两个索引恢复位置。这和 {@link InputStream}
+ * 中标记、恢复方法的工作方式相似，只是，这里没有 {@code readlimit} 。
  *
  * <h3>Derived buffers</h3>
+ * <h3>Derived buffers 派生缓冲区</h3>
  *
  * You can create a view of an existing buffer by calling one of the following methods:
+ * 你可以通过调用以下方法创建一个已存在缓冲区的视图：
  * <ul>
  *   <li>{@link #duplicate()}</li>
  *   <li>{@link #slice()}</li>
@@ -208,11 +269,16 @@ import java.nio.charset.UnsupportedCharsetException;
  * A derived buffer will have an independent {@link #readerIndex() readerIndex},
  * {@link #writerIndex() writerIndex} and marker indexes, while it shares
  * other internal data representation, just like a NIO buffer does.
+ * 派生缓冲区将有独立的 {@link #readerIndex() readerIndex} 、
+ * {@link #writerIndex() writerIndex} 和标记索引，但它将共享内部的数据呈现，
+ * 就像 NIO 缓冲区那样。
  * <p>
  * In case a completely fresh copy of an existing buffer is required, please
  * call {@link #copy()} method instead.
+ * 如果要获取一个已存在缓冲区的完全全新的复本，请使用 {@link #copy()} 方法
  *
  * <h4>Non-retained and retained derived buffers</h4>
+ * <h4>Non-retained and retained derived buffers 不保留和保留派生缓冲区</h4>
  *
  * Note that the {@link #duplicate()}, {@link #slice()}, {@link #slice(int, int)} and {@link #readSlice(int)} does NOT
  * call {@link #retain()} on the returned derived buffer, and thus its reference count will NOT be increased. If you

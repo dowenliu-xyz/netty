@@ -434,7 +434,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     @Override
     protected void run() {
         int selectCnt = 0;
-        for (;;) {
+        for (;;) { // 死循环，监听处理事件
             try {
                 int strategy;
                 try {
