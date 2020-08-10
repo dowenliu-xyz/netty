@@ -16,11 +16,8 @@
 package io.netty.example.echo;
 
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.ChannelPipeline;
-import io.netty.channel.EventLoopGroup;
+import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioChannelOption;
@@ -59,9 +56,20 @@ public final class EchoServer {
              .channel(NioServerSocketChannel.class)
              .option(ChannelOption.SO_BACKLOG, 100)
              .handler(new LoggingHandler(LogLevel.INFO))
+
              // 两种设置 keepalive 风格
              .childOption(ChannelOption.SO_KEEPALIVE, true)
              .childOption(NioChannelOption.SO_KEEPALIVE, true)
+
+             // 切换到 unpooled 的方式之一
+             .childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
+//             .childOption(ChannelOption.ALLOCATOR, UnpooledByteBufAllocator.DEFAULT)
+             // 第二种方式是为JVM提供 -Dio.netty.allocator.type 参数。ByteBufUtil:77
+
+             // 切换堆内buffer或直接内存buffer 的方法：
+             // 1 jvm参数 io.netty.noPreferDirect false 使用直接内存 true 使用堆内 buffer
+             // 2 使用构造器参数，已过时
+
              .childHandler(new ChannelInitializer<SocketChannel>() {
                  @Override
                  public void initChannel(SocketChannel ch) throws Exception {
